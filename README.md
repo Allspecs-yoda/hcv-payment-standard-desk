@@ -33,7 +33,7 @@ No API keys. No network after download.
 
 ## Price
 
-$49 USD. Unlimited non-exclusive buyers; copies may be resold. If a Stripe Payment Link exists, pay there, then open a GitHub issue titled `CLAIM: HCV Payment Standard Desk` with the receipt last-4. If checkout is down, star + watch and open the same CLAIM issue.
+$49 USD. Unlimited non-exclusive buyers; copies may be resold. Pay https://buy.stripe.com/00w4gAdW86UXaRQdQpcIE07 then open a GitHub issue titled `CLAIM: HCV Payment Standard Desk` with the receipt last-4. If checkout is down, star + watch and open the same CLAIM issue.
 
 ## License
 
