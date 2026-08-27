@@ -1,0 +1,5 @@
+id,zip,br,vbr,pct,rent_to_owner,utility_allowance,ttp,note
+LA-90210-hap,90210,2,2,110,4000,200,1200,Beverly Hills 2BR HAP; gross rent caps
+LA-90210-overhoused,90210,3,2,110,4000,200,1200,2BR voucher in 3BR unit; c(1) lower of sizes
+NY-10001-hap,10001,1,1,110,3600,150,1400,Manhattan 1BR HAP vs TTP
+BHM-35203-hap,35203,2,2,110,1000,80,450,Birmingham 2BR; PS may cap
