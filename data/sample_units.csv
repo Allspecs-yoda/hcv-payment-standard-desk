@@ -1,0 +1,13 @@
+id,zip,state,br,asking_rent,pct,note
+LA-90210-2,90210,CA,2,4200,110,Beverly Hills 2BR vs LA metro FMR
+LA-90001-2,90001,CA,2,1800,110,South LA 2BR cheaper than metro
+NY-10001-1,10001,NY,1,3900,110,Manhattan 1BR vs NYC HMFA
+ATL-30318-2,30318,GA,2,1950,100,Atlanta 2BR at 100% SAFMR
+BHM-35203-2,35203,AL,2,1100,110,Birmingham downtown 2BR
+BOS-02108-0,02108,MA,0,2800,110,Boston Beacon Hill studio
+DAL-75201-2,75201,TX,2,2400,110,Dallas court-designated 2011
+PHX-85016-3,85016,AZ,3,2200,90,Phoenix 3BR at floor 90
+SEA-98101-1,98101,WA,1,2100,110,Seattle-Bellevue 1BR
+WDC-20001-2,20001,DC,2,2800,110,DC 2BR vs Washington HMFA
+MGM-county,36104,AL,2,950,110,Montgomery ZIP vs county Autauga-class MSA
+NON-METRO,99723,AK,2,1400,110,Utqiagvik-style non-metro ZIP if present else skip
