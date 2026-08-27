@@ -1,0 +1,7 @@
+rule_id,label,low_pct,high_pct,hud_approval,authority,notes
+basic_range,basic range 90-110 of applicable FMR,90,110,none,24 CFR 982.503(c),"PHA may set any amount in the range without HUD approval or prior notice. Must revise within 3 months of a new FMR if needed to stay in range."
+zip_eps,ZIP exception up to 110 of SAFMR,90,110,none,24 CFR 982.503(d)(2),"PHA not in a designated/opt-in SAFMR area may set a ZIP exception up to 110% of that ZIP's SAFMR without HUD approval. Whole ZIP only."
+notify_120,exception 110-120 with HUD notice,110,120,notify,24 CFR 982.503(d)(3),"Allowed for a HUD-specified duration if success rate <75%, or >40% of families pay >30% of adjusted income, or other Secretary criteria."
+hud_above_110,exception above 110 needs HUD approval,110,999,hud_approval,24 CFR 982.503(d)(4),"Unless (d)(2)/(3)/(5) apply. Must submit rental-market data for the exception area vs the FMR area."
+ra_120,reasonable accommodation up to 120,100,120,none,24 CFR 982.503(d)(5),"Individual family, 24 CFR part 8, no HUD approval up to 120% of applicable FMR. Above 120% needs HUD approval."
+below_90,below 90 of FMR,0,90,hud_approval,24 CFR 982.503(e),"HUD sole discretion. Will not approve if it would put >40% of TBRA families over 30% rent burden unless needed to prevent terminations."
