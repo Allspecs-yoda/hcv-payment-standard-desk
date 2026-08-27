@@ -13,6 +13,7 @@ No network. No API keys. Planning only — not a PHA determination.
   python3 desk/quote.py --batch data/sample_units.csv
   python3 desk/quote.py --cheap 15
   python3 desk/quote.py --high 10
+  python3 desk/quote.py --hap 90210 --br 2 --vbr 2 --pct 110 --rent 4000 --ua 200 --ttp 1200
 """
 
 from __future__ import annotations
@@ -73,6 +74,13 @@ def mandatory() -> list[dict]:
 
 def rules() -> list[dict]:
     return load_csv(DATA / "payment_rules.csv")
+
+
+def hap_rules() -> list[dict]:
+    path = DATA / "hap_rules.csv"
+    if not path.exists():
+        return []
+    return load_csv(path)
 
 
 def mand_by_code() -> dict[str, dict]:
@@ -295,6 +303,10 @@ def cmd_watch() -> int:
     print("- FY2026 FMRs: HUD USER FY26_FMRs_revised.xlsx (effective with the FY2026 schedule).")
     print("- FY2026 SAFMRs revised file effective 2026-05-21 (huduser smallarea index).")
     print("- Cleveland FY2026 HUD area code remapped METRO17460M17460 → METRO17410N17460.")
+    print("- HAP = lower of (PS − TTP) or (gross rent − TTP); 24 CFR 982.505(b). Gross rent = rent to owner + UA (982.4).")
+    print("- Family PS = lower of voucher-size PS and unit-size PS (982.505(c)(1)). Extra bedrooms do not raise subsidy.")
+    print("- In-place PS decrease: first cut not earlier than two years + 12 months' notice (982.505(c)(3); 89 FR 38302).")
+    print("- TTP planning proxy: 30% of monthly adjusted income is only one 5.628(a) prong — pass --ttp when known.")
     print()
     cmd_list_safmr()
     return 0
@@ -343,6 +355,137 @@ def cmd_rules() -> int:
         band = f"{r['low_pct']}-{r['high_pct']}%"
         print(f"{r['rule_id']:<16} {band:<12} {r['hud_approval']:<14} {r['authority']}")
         print(f"  {r['notes']}")
+    rows = hap_rules()
+    if rows:
+        print("\n982.505 HAP rules")
+        for r in rows:
+            print(f"{r['rule_id']:<16} {r['authority']}")
+            print(f"  {r['notes']}")
+    return 0
+
+
+def ttp_from_args(ttp: int | None, mai: int | None) -> int:
+    if ttp is not None:
+        return ttp
+    if mai is not None:
+        return hud_round(0.30 * mai)
+    raise SystemExit("HAP quote needs --ttp (known TTP) or --mai (monthly adjusted income; 5.628(a)(1) 30% prong only).")
+
+
+def family_payment_standard(ps_voucher: int, ps_unit: int, hold_old: int | None, years_in_unit: float | None) -> tuple[int, str]:
+    base = min(ps_voucher, ps_unit)
+    note = "982.505(c)(1) lower of voucher-size PS and unit-size PS"
+    if hold_old is None:
+        return base, note
+    if years_in_unit is None:
+        raise SystemExit("--hold-old needs --years-in-unit (years the family has stayed in this unit since the schedule decrease).")
+    if hold_old <= base:
+        return base, note + "; --hold-old is not above the current schedule"
+    if years_in_unit < 2:
+        return hold_old, (
+            "982.505(c)(3): in-place decrease may not apply earlier than two years after the "
+            f"schedule drop (family in unit {years_in_unit:g}y); quoting hold-old PS {hold_old}"
+        )
+    return base, (
+        "982.505(c)(3): two-year floor elapsed; quoting current schedule. "
+        "Still needs 12 months' written notice before a cut hits the family."
+    )
+
+
+def print_hap(
+    zipc: str,
+    row: dict,
+    unit_br: int,
+    voucher_br: int,
+    pct: int,
+    rent: int,
+    ua: int,
+    ttp: int,
+    hold_old: int | None,
+    years_in_unit: float | None,
+) -> None:
+    code = row["hud_area_code"]
+    fmr_unit = fmr_for_br(row, unit_br, "safmr")
+    fmr_vouch = fmr_for_br(row, voucher_br, "safmr")
+    ps_unit = ps(fmr_unit, pct)
+    ps_vouch = ps(fmr_vouch, pct)
+    fam_ps, ps_note = family_payment_standard(ps_vouch, ps_unit, hold_old, years_in_unit)
+    gross = rent + ua
+    hap = max(0, min(fam_ps - ttp, gross - ttp))
+    family_share = gross - hap
+    family_rent = max(0, rent - hap)
+    ureimb = max(0, hap - rent)
+    cap = "payment standard" if (fam_ps - ttp) <= (gross - ttp) else "gross rent"
+    print(f"ZIP {row['zip']}  unit {unit_br}BR  voucher {voucher_br}BR  {pct}%")
+    print(f"  area: {row['hud_area_name']} ({code})")
+    print(f"  applicable FMR basis: {flag_mandatory(code)}")
+    print(f"  unit SAFMR / PS: {money(fmr_unit)} / {money(ps_unit)}")
+    print(f"  voucher SAFMR / PS: {money(fmr_vouch)} / {money(ps_vouch)}")
+    print(f"  family payment standard: {money(fam_ps)}  ({ps_note})")
+    print(f"  rent to owner {money(rent)} + UA {money(ua)} = gross rent {money(gross)}  (982.4)")
+    print(f"  TTP: {money(ttp)}")
+    print(f"  PS−TTP {money(fam_ps - ttp)} vs gross−TTP {money(gross - ttp)} → HAP {money(hap)} (capped by {cap}; 982.505(b))")
+    print(f"  family share: {money(family_share)}  family rent to owner: {money(family_rent)}  utility reimbursement: {money(ureimb)}")
+    if voucher_br != unit_br:
+        print("  (c)(1) used the lower bedroom column — extra bedrooms on the lease do not raise the family PS.")
+    if ttp > fam_ps:
+        print("  TTP exceeds family PS; HAP is $0 (planning).")
+    print("  Not a HAP determination. TTP here is an input, not a 5.628 highest-of computation unless --mai.")
+
+
+def cmd_hap(
+    zipc: str,
+    unit_br: int,
+    voucher_br: int,
+    pct: int,
+    rent: int | None,
+    ua: int,
+    ttp: int | None,
+    mai: int | None,
+    hold_old: int | None,
+    years_in_unit: float | None,
+) -> int:
+    if rent is None:
+        raise SystemExit("--hap needs --rent (rent to owner, 982.4).")
+    ttp_val = ttp_from_args(ttp, mai)
+    hits = find_zips(zipc)
+    for i, row in enumerate(hits):
+        if i:
+            print("---")
+        print_hap(zipc, row, unit_br, voucher_br, pct, rent, ua, ttp_val, hold_old, years_in_unit)
+    if len(hits) > 1:
+        print(f"\n{len(hits)} HUD areas share this ZIP. Quote each; do not blend.")
+    return 0
+
+
+def cmd_hap_batch(path: Path) -> int:
+    recs = load_csv(path)
+    print(f"{'id':<18} {'zip':<6} {'u/v':<4} {'gross':>7} {'PS':>7} {'TTP':>6} {'HAP':>7} cap")
+    for rec in recs:
+        zipc = rec["zip"].zfill(5)
+        unit_br = int(rec["br"])
+        voucher_br = int(rec["vbr"]) if rec.get("vbr") else unit_br
+        pct = int(rec["pct"]) if rec.get("pct") else 110
+        rent = int(float(rec["rent_to_owner"]))
+        ua = int(float(rec.get("utility_allowance") or 0))
+        ttp = int(float(rec["ttp"]))
+        try:
+            hits = find_zips(zipc)
+        except SystemExit:
+            print(f"{rec.get('id',''):<18} {zipc:<6} ZIP not in SAFMR table")
+            continue
+        row = hits[0]
+        fmr_unit = fmr_for_br(row, unit_br, "safmr")
+        fmr_vouch = fmr_for_br(row, voucher_br, "safmr")
+        fam_ps = min(ps(fmr_vouch, pct), ps(fmr_unit, pct))
+        gross = rent + ua
+        hap = max(0, min(fam_ps - ttp, gross - ttp))
+        cap = "PS" if (fam_ps - ttp) <= (gross - ttp) else "GR"
+        print(
+            f"{rec.get('id',''):<18} {zipc:<6} {unit_br}/{voucher_br:<3} {money(gross):>7} "
+            f"{money(fam_ps):>7} {money(ttp):>6} {money(hap):>7} {cap}"
+        )
+    print("HAP = max(0, min(PS−TTP, gross−TTP)) per 982.505(b). Planning only.")
     return 0
 
 
@@ -362,6 +505,15 @@ def main() -> int:
     p.add_argument("--cheap", type=int, nargs="?", const=15, metavar="N")
     p.add_argument("--high", type=int, nargs="?", const=10, metavar="N")
     p.add_argument("--rules", action="store_true")
+    p.add_argument("--hap", metavar="ZIP", help="982.505 HAP quote for a ZIP (needs --rent and --ttp or --mai)")
+    p.add_argument("--vbr", type=int, help="voucher / family unit size bedrooms (default: --br)")
+    p.add_argument("--rent", type=int, help="rent to owner USD (982.4)")
+    p.add_argument("--ua", type=int, default=0, help="utility allowance USD (default 0)")
+    p.add_argument("--ttp", type=int, help="known total tenant payment USD")
+    p.add_argument("--mai", type=int, help="monthly adjusted income USD; TTP = 30% (5.628(a)(1) only)")
+    p.add_argument("--hold-old", type=int, dest="hold_old", help="prior in-place family PS for 982.505(c)(3) hold")
+    p.add_argument("--years-in-unit", type=float, dest="years_in_unit", help="years family has stayed since the PS decrease")
+    p.add_argument("--hap-batch", dest="hap_batch", help="CSV of HAP sample units")
     args = p.parse_args()
     if args.br not in BR_KEYS:
         print("--br must be 0..4", file=sys.stderr)
@@ -375,6 +527,25 @@ def main() -> int:
         return cmd_list_safmr()
     if args.rules:
         return cmd_rules()
+    if args.hap_batch:
+        return cmd_hap_batch(Path(args.hap_batch))
+    if args.hap:
+        vbr = args.vbr if args.vbr is not None else args.br
+        if vbr not in BR_KEYS:
+            print("--vbr must be 0..4", file=sys.stderr)
+            return 1
+        return cmd_hap(
+            args.hap,
+            args.br,
+            vbr,
+            args.pct,
+            args.rent,
+            args.ua,
+            args.ttp,
+            args.mai,
+            args.hold_old,
+            args.years_in_unit,
+        )
     if args.list is not None:
         return cmd_list_state(args.list or None)
     if args.compare:
